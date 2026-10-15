@@ -70,6 +70,16 @@ RUN git clone https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3.git /comfyui
     && python -m pip install -c /tmp/comfy-constraints.txt -r /comfyui/custom_nodes/Veda-on-ComfyUI/requirements.txt \
     && python -c "import torch, triton, diffusers, peft, cv2, gguf, ultralytics; print('h3 packages', torch.__version__)"
 
+# Exact upstream SeedVR2 pin exposes an empty device list on CPU-only runtimes;
+# schema code uses devices[0] and drops SeedVR2LoadDiTModel from /object_info.
+# Reuse the minimal reviewed CPU control-plane fallback (already present on
+# the Empower editor). GPU-based inference/device detection remains unchanged.
+COPY patches/seedvr2-cpu-schema.patch /tmp/seedvr2-cpu-schema.patch
+RUN cd /comfyui/custom_nodes/seedvr2_videoupscaler \
+    && git apply --unidiff-zero --check /tmp/seedvr2-cpu-schema.patch \
+    && git apply --unidiff-zero /tmp/seedvr2-cpu-schema.patch \
+    && python -c "from pathlib import Path; p=Path('src/optimization/memory_manager.py').read_text(); assert 'return result if result else' in p and 'cuda:0' in p"
+
 # Native wheels are installed; remove build compiler headers where possible.
 # Important: apt autoremove can remove system libs; do not auto-purge until
 # actual CPU imports and /object_info registration have been validated.

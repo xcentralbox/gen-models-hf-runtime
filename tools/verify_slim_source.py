@@ -19,6 +19,12 @@ assert 'git clone https://github.com' in s
 assert "run_job(" not in s+wf
 assert 'docker/build-push-action@v6' in wf
 assert 'workflow_dispatch:' in wf
+assert 'patches/seedvr2-cpu-schema.patch' in s
+assert 'git apply --unidiff-zero --check /tmp/seedvr2-cpu-schema.patch' in s
+assert 'gpu' not in (root/'patches/seedvr2-cpu-schema.patch').read_text().split('return result if result else')[-1].lower()
+assert "github.event.head_commit.message == '[SLIM-OCI-FIX]'" in wf
+assert 'needs.build.outputs.digest' in wf
+assert 'SeedVR2LoadDiTModel' in wf
 assert "github.event.head_commit.message == '[SLIM-OCI-BUILD]'" in wf
 assert 'branches: [main]' in wf and 'build-universal-slim.yml' in wf
 assert 'ghcr.io/xcentralbox/comfyui-universal-slim' in wf

@@ -19,9 +19,11 @@ concurrency:
 
 jobs:
   build:
-    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == '[SLIM-OCI-BUILD]'
+    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == '[SLIM-OCI-BUILD]' || github.event.head_commit.message == '[SLIM-OCI-FIX]'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
       - name: Verify no private weights, tokens, workflows or GPU inference
@@ -81,3 +83,93 @@ jobs:
           echo 'This image contains all currently redistributable LTX/H3/Qwen/audio nodes only; local user-defined overlays omitted.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Real image size, anonymous OCI pull, CPU startup, CUDA compatibility and HF model mounts still require independent verification.' >> "$GITHUB_STEP_SUMMARY"
           echo 'No HF Jobs, GPU inference, or production switch were launched.' >> "$GITHUB_STEP_SUMMARY"
+
+  # Same published digest, on a FRESH disposable GitHub CPU VM. No HF GPU,
+  # weights, account tokens, model downloads or user workflows are involved.
+  cpu-smoke:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      OCI_IMAGE: ghcr.io/xcentralbox/comfyui-universal-slim@${{ needs.build.outputs.digest }}
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify pinned digest and public-source checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/validate.py --public
+          python3 tools/verify_slim_source.py
+          [[ "$OCI_IMAGE" =~ @sha256:[0-9a-f]{64}$ ]]
+          echo "Verifying immutable OCI image on CPU (no HF Jobs)."
+      - name: Free disk on disposable GitHub VM (not on Empower)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /usr/local/share/powershell \
+            /usr/local/.ghcup /opt/hostedtoolcache /usr/local/share/chromium /usr/local/share/chromium-browser || true
+          sudo docker system prune -af || true
+          df -h / /var/lib/docker
+          free_kib=$(df -Pk /var/lib/docker | awk 'NR==2 {print $4}')
+          if (( free_kib < 24 * 1024 * 1024 )); then echo 'Insufficient ephemeral disk' >&2; exit 1; fi
+      - name: Anonymous pull of newly built immutable GHCR image
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$OCI_IMAGE"
+          docker image inspect "$OCI_IMAGE" --format 'ID={{.Id}} SIZE_BYTES={{.Size}}'
+          df -h / /var/lib/docker
+      - name: Verify Python, CUDA-built torch and both node families (CPU only)
+        timeout-minutes: 4
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --memory 6g --cpus 2 \
+            -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
+            "$OCI_IMAGE" python -c "import pathlib,torch,torchvision,torchaudio,triton,transformers,diffusers,kornia,colour,OpenImageIO,websocket,peft,cv2,gguf; assert torch.version.cuda=='12.8' and not torch.cuda.is_available(); assert pathlib.Path('/comfyui/custom_nodes/ComfyUI-LTX2.5-MSR').is_dir(); assert pathlib.Path('/comfyui/custom_nodes/seedvr2_videoupscaler/src/optimization/memory_manager.py').is_file(); print('PASS: CPU package imports; CUDA wheel installed, no GPU used.')"
+      - name: Real ComfyUI CPU server and ALL mandatory LTX H3 SeedVR Veda nodes
+        id: nodecheck
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'docker logs --tail 85 universal-slim-fixed-cpu || true; docker rm -f universal-slim-fixed-cpu >/dev/null 2>&1 || true' EXIT
+          docker run -d --name universal-slim-fixed-cpu --network none --memory 6g --cpus 2 \
+            --pids-limit 512 --cap-drop ALL --security-opt no-new-privileges \
+            -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
+            "$OCI_IMAGE" python main.py --cpu --listen 127.0.0.1 --port 8188 --disable-auto-launch
+          ready=0
+          for i in $(seq 1 90); do
+            if docker exec universal-slim-fixed-cpu python -c "import urllib.request; assert urllib.request.urlopen('http://127.0.0.1:8188/system_stats',timeout=2).status==200" >/dev/null 2>&1; then ready=1; break; fi
+            if [[ "$(docker inspect -f '{{.State.Running}}' universal-slim-fixed-cpu)" != true ]]; then echo 'ComfyUI exited during CPU startup' >&2; exit 1; fi
+            sleep 4
+          done
+          if (( ready != 1 )); then echo 'CPU startup timed out' >&2; exit 1; fi
+          set +e
+          node_output=$(docker exec universal-slim-fixed-cpu python -c "import json,urllib.request,sys; d=json.load(urllib.request.urlopen('http://127.0.0.1:8188/object_info',timeout=100)); must=('ComfyUILTX25MSRICLoRALoader','ComfyUILTX25MSRMultiReferenceGuide','LTXVLatentUpsampler','MiniMaxH3EasyLoader','MiniMaxH3Easy','MiniMaxH3EasyOutput','VedaSparseAttention','SeedVR2LoadDiTModel','SeedVR2VideoUpscaler','H3FaceSelect','H3FaceStitch','TextEncodeQwenImage21'); missing=[x for x in must if x not in d]; print('NODE_RESULT='+('PASS' if not missing else 'MISSING_'+','.join(missing)),flush=True); print('REGISTERED_COUNT='+str(len(d)),flush=True); sys.exit(0 if not missing else 7)" 2>&1)
+          node_rc=$?
+          set -e
+          printf '%s\n' "$node_output" | tee "$RUNNER_TEMP/universal-slim-fixed-result.txt"
+          result=$(printf '%s\n' "$node_output" | sed -n 's/^NODE_RESULT=//p' | head -n 1 | tr -cd 'A-Za-z0-9_,.-' | cut -c 1-170)
+          echo "fingerprint=${result:-NO_NODE_RESPONSE}" >> "$GITHUB_OUTPUT"
+          if ((node_rc != 0)); then exit "$node_rc"; fi
+          echo 'PASS: all 12 mandatory classes registered on ComfyUI CPU server.'
+      - name: Publish tiny public-safe node-check result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: universal-slim-nodecheck-${{ steps.nodecheck.outputs.fingerprint || 'UNKNOWN' }}
+          path: ${{ runner.temp }}/universal-slim-fixed-result.txt
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Cleanup CPU container even on failure
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f universal-slim-fixed-cpu >/dev/null 2>&1 || true
+          echo 'This CI ran no HF/Modal GPU, no weights and no production activation.'

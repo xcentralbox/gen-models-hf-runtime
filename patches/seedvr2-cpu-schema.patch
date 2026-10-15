@@ -1,0 +1,7 @@
+--- a/src/optimization/memory_manager.py
++++ b/src/optimization/memory_manager.py
+@@ -94 +94,3 @@
+-    return result if result else []
++    # Keep the remote CUDA device selectable while defining ComfyUI node schemas
++    # on CPU-only infrastructure; real inference still requires an actual GPU.
++    return result if result else ["cuda:0"]
