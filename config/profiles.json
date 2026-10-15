@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "registry_owner": "xcentralbox",
+  "registry_prefix": "ghcr.io/xcentralbox/comfyui-",
+  "core_version": "3c1b7a17fdf239d35ce98cc777756f572d089795",
+  "production_enabled": false,
+  "build": "manual-only",
+  "gpu_min_containers": 0,
+  "images": {
+    "core": {
+      "docker_target": "core",
+      "workflow_family": ["Vectors (CPU-only; HF GPU not needed)"],
+      "role": "shared ComfyUI/PyTorch/CUDA base; not a paid runtime default",
+      "deploy_status": "source_prepared_unbuilt"
+    },
+    "ltx": {
+      "docker_target": "ltx",
+      "workflow_family": ["LTX-2.5"],
+      "role": "LTX-2.5, MSR V2, ControlNet Aux",
+      "deploy_status": "source_prepared_unbuilt",
+      "mandatory_nodes": ["ComfyUILTX25MSRICLoRA"],
+      "missing_overlays": [],
+      "min_gpu_vram_validation": "unverified"
+    },
+    "h3": {
+      "docker_target": "h3",
+      "workflow_family": ["MiniMaxH3-Production"],
+      "role": "MiniMax H3, Veda, SeedVR2, FaceRefine",
+      "deploy_status": "source_prepared_unbuilt",
+      "missing_overlays": ["ComfyUI-H3-PersonMask"],
+      "min_gpu_vram_validation": "unverified"
+    },
+    "qwen": {
+      "docker_target": "qwen",
+      "workflow_family": ["QWEN21"],
+      "role": "Qwen Image 2.1 standard ComfyUI with existing H3 dependencies, independently extensible",
+      "deploy_status": "source_prepared_unbuilt",
+      "missing_overlays": [],
+      "min_gpu_vram_validation": "unverified"
+    },
+    "audio": {
+      "docker_target": "audio",
+      "workflow_family": ["Audio"],
+      "role": "Audio workloads; extends H3 profile initially",
+      "deploy_status": "source_prepared_unbuilt",
+      "missing_overlays": ["ComfyUI-YuE2-Instrumental"],
+      "min_gpu_vram_validation": "unverified"
+    }
+  },
+  "other_workflows": {
+    "Vectors": "cpu_only_unless_explicit_audited_gpu_extension",
+    "Archive": "not_for_automatic_gpu_routing"
+  },
+  "policy": {
+    "no_gpu_at_idle": true,
+    "no_per_job_install": true,
+    "no_model_weights_in_images": true,
+    "fail_closed_on_missing_custom_nodes": true,
+    "fail_closed_on_ambiguous_model_family": true,
+    "require_immutable_oci_digest_for_production": true,
+    "image_build_does_not_enable_hf_jobs": true
+  }
+}

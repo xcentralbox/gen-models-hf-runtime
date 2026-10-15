@@ -1,0 +1,1 @@
+This directory intentionally contains NO user-defined source. Public GHCR images must not include local ComfyUI-H3-PersonMask or ComfyUI-YuE2-Instrumental without explicit distribution permission and a license/security review. The private build overlay mechanism is not implemented; dependent profiles remain not production-ready.

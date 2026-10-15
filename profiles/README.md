@@ -1,0 +1,1 @@
+The real image build targets are `core`, `ltx`, `h3`, `qwen`, `audio` in the top-level Dockerfile. `config/profiles.json` is their API-neutral registry. Keep custom nodes pinned to immutable upstream source commits. Never commit local user-defined extensions, weight files, user workflows or secrets; handle approved overlays through a separate reviewed channel.
