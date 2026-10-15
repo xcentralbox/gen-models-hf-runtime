@@ -1,0 +1,95 @@
+name: Verify published LTX OCI image (CPU only; NO HF GPU)
+
+on:
+  workflow_dispatch:
+  # One-time operator-approved test, the push must change this workflow file AND
+  # have the exact marker. Ordinary source pushes cannot trigger this job.
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/verify-oci-cpu.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-ltx-oci-cpu
+  cancel-in-progress: false
+
+jobs:
+  cpu-smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == '[CPU-OCI-VERIFY]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      OCI_IMAGE: ghcr.io/xcentralbox/comfyui-ltx@sha256:2fb33e0935d5162f4bae8649e18207b4c68df3391284771671c21eef4c917a73
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - name: Source checkout and manual-only build policy
+        uses: actions/checkout@v4
+      - name: Validate no GPU code and public-source hygiene
+        run: |
+          python3 tools/validate.py --public
+          echo 'This is a CPU-only OCI runtime test, NOT an image build or HF Jobs request.'
+      - name: Prepare ephemeral CPU runner free disk (do not use Empower)
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h / /var/lib/docker
+          # GitHub-hosted ephemeral VM only; remove preinstalled toolchains unrelated
+          # to Docker. Never run on Empower / Lover / user-owned host.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /usr/local/share/powershell \
+            /usr/local/.ghcup /opt/hostedtoolcache /usr/local/share/chromium /usr/local/share/chromium-browser || true
+          sudo docker system prune -af || true
+          df -h / /var/lib/docker
+          free_kib=$(df -Pk /var/lib/docker | awk 'NR==2 {print $4}')
+          echo "Docker free GiB: $((free_kib/1024/1024))"
+          if (( free_kib < 27 * 1024 * 1024 )); then
+            echo 'INSUFFICIENT_EPHEMERAL_DISK: refuse ~10.22GiB compressed image pull' >&2
+            exit 1
+          fi
+      - name: Pull pinned public GHCR image (no build, no credentials)
+        timeout-minutes: 21
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$OCI_IMAGE"
+          docker image inspect "$OCI_IMAGE" --format 'IMAGE_ID={{.Id}} SIZE_BYTES={{.Size}} OS={{.Os}} ARCH={{.Architecture}}'
+          df -h / /var/lib/docker
+      - name: CPU-only Python, torch and LTX packages import smoke
+        timeout-minutes: 3
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --memory 5g --cpus 2 \
+            -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
+            "$OCI_IMAGE" python -c "import pathlib,torch,transformers,diffusers,kornia,colour,OpenImageIO,websocket;print('CPU_ONLY',not torch.cuda.is_available(),'TORCH',torch.__version__);assert not torch.cuda.is_available();assert pathlib.Path('/comfyui/main.py').is_file();assert pathlib.Path('/comfyui/custom_nodes/ComfyUI-LTXVideo').is_dir();assert pathlib.Path('/comfyui/custom_nodes/ComfyUI-LTX2.5-MSR').is_dir()"
+      - name: Start real ComfyUI server on CPU, verify /object_info classes
+        timeout-minutes: 7
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'docker logs --tail 100 hf-comfy-cpu-check || true; docker rm -f hf-comfy-cpu-check >/dev/null 2>&1 || true' EXIT
+          docker run --detach --name hf-comfy-cpu-check --network none --memory 5g --cpus 2 \
+            --pids-limit 512 --cap-drop ALL --security-opt no-new-privileges \
+            -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
+            "$OCI_IMAGE" python main.py --cpu --listen 127.0.0.1 --port 8188 --disable-auto-launch
+          ready=0
+          for attempt in $(seq 1 65); do
+            if docker exec hf-comfy-cpu-check python -c "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8188/system_stats',timeout=2); assert r.status==200" >/dev/null 2>&1; then ready=1; break; fi
+            if [[ "$(docker inspect -f '{{.State.Running}}' hf-comfy-cpu-check)" != true ]]; then
+              echo 'ComfyUI CPU container terminated prematurely' >&2
+              exit 1
+            fi
+            sleep 3
+          done
+          if (( ready != 1 )); then echo 'ComfyUI CPU startup timeout' >&2; exit 1; fi
+          docker exec hf-comfy-cpu-check python -c "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8188/object_info',timeout=90)); required=('ComfyUILTX25MSRICLoRALoader','ComfyUILTX25MSRMultiReferenceGuide','LTXVLatentUpsampler','LTXVConditioning','LTXVAudioVAEEncode','LTXICLoRALoaderModelOnly','KSamplerSelect','GemmaAPITextEncode'); missing=[n for n in required if n not in d]; print('OCI_CPU_REGISTERED_NODES',len(d),'REQUIRED_MISSING',missing); assert not missing, 'Missing required 04D/04E LTX nodes';"
+          echo 'PASS: published immutable OCI image starts ComfyUI CPU server and registers LTX/MSR nodes.'
+      - name: Cleanup check — do not leave CPU containers running
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f hf-comfy-cpu-check >/dev/null 2>&1 || true
+          echo 'HF GPU Job was NEVER created. HF production remains separately root-disarmed.'
