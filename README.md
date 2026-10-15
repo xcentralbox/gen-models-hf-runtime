@@ -42,3 +42,7 @@ See [`docs/SLIM-UNIVERSAL.md`](docs/SLIM-UNIVERSAL.md) for scope, known missing 
 ### Universal slim CPU image verified
 
 GitHub [run 38723015759](https://github.com/xcentralbox/gen-models-hf-runtime/actions/runs/38723015759) **PASSED** both GitHub CPU build and real ComfyUI CPU-startup/12-node smoke after a pinned SeedVR2 schema patch. Published immutable image: `ghcr.io/xcentralbox/comfyui-universal-slim@sha256:afca7f0ff17c32697d5959836bd0eb51915481a1e27b7b845e677532ef8a8805` (~5.624 GiB compressed). See [`config/universal-slim.json`](config/universal-slim.json) and [`docs/SLIM-UNIVERSAL.md`](docs/SLIM-UNIVERSAL.md). **No HF GPU end-to-end run has been tested or enabled**; missing local custom nodes are not publicly redistributed.
+
+#### HF real GPU CUDA smoke proven (no model inference)
+
+On 2026-10-15 the CPU-verified universal OCI image above passed a **single bounded paid HF Jobs NVIDIA L40S CUDA test**: Torch 2.9.1 CUDA 12.8, CUDA matmul, actual GPU ComfyUI startup, 1,165 registered node types and all 12 mandatory public family classes. HF [Job `6ad0b8e4c662881452250c66`](https://huggingface.co/jobs/Xcentralbox/6ad0b8e4c662881452250c66) completed after 98s scheduling + 35s running. **Not** a video/weight-mount/bridge production test. GPU production remains disabled; `config/universal-slim.json` distinguishes CUDA smoke from real model inference.

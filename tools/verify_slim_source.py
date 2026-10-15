@@ -45,3 +45,9 @@ assert meta['image'].startswith('ghcr.io/xcentralbox/comfyui-universal-slim@sha2
 assert meta['build_run_id']==38723015759 and meta['cpu_smoke_run_id']==38723015759
 assert len(meta['cpu_mandatory_node_classes_verified'])==12
 assert meta['cpu_test_status']=='completed_success'
+
+assert meta['hf_cuda_smoke_verified'] is True
+assert meta['hf_cuda_smoke_run']=='completed_success'
+assert meta['hf_real_model_inference_verified'] is False
+assert meta['hf_video_generation_verified'] is False
+assert meta['hf_model_mounts_verified'] is False
