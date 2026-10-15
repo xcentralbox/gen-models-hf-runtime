@@ -37,3 +37,11 @@ old=json.loads((root/'config/profiles.json').read_text())
 assert old['production_enabled'] is False
 assert old['images']['ltx']['deploy_status']=='oci_cpu_verified'
 print('PASS minimal Python base, pinned official CUDA torch, single combined public node stage, no HF GPU, manual or guarded one-time CPU builder')
+
+# Public OCI metadata is factual and does not arm any paid GPU runtime.
+meta=json.loads((root/'config/universal-slim.json').read_text())
+assert meta['production_enabled'] is False and meta['gpu_cuda_inference_verified'] is False
+assert meta['image'].startswith('ghcr.io/xcentralbox/comfyui-universal-slim@sha256:')
+assert meta['build_run_id']==38723015759 and meta['cpu_smoke_run_id']==38723015759
+assert len(meta['cpu_mandatory_node_classes_verified'])==12
+assert meta['cpu_test_status']=='completed_success'

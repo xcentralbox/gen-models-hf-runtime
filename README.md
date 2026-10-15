@@ -38,3 +38,7 @@ Validated against live Empower worker sources on 2026-10-15. The previous Lover 
 As requested, a new **single combined** ComfyUI image based on `python:3.12-slim` is prepared in [`Dockerfile.slim`](Dockerfile.slim), with CPU-only GitHub build in [`.github/workflows/build-universal-slim.yml`](.github/workflows/build-universal-slim.yml). It installs official **PyTorch 2.9.1 + CUDA 12.8** Linux wheels, ComfyUI and the *public* LTX/H3 custom nodes before any GPU Job. This does **not** mean the final image is 40 MiB, and is distinct from the already CPU-verified LTX image.
 
 See [`docs/SLIM-UNIVERSAL.md`](docs/SLIM-UNIVERSAL.md) for scope, known missing private-node overlays and verification requirements. **Until OCI digest is independently verified and CUDA/model tests are approved, do not enable HF production.**
+
+### Universal slim CPU image verified
+
+GitHub [run 38723015759](https://github.com/xcentralbox/gen-models-hf-runtime/actions/runs/38723015759) **PASSED** both GitHub CPU build and real ComfyUI CPU-startup/12-node smoke after a pinned SeedVR2 schema patch. Published immutable image: `ghcr.io/xcentralbox/comfyui-universal-slim@sha256:afca7f0ff17c32697d5959836bd0eb51915481a1e27b7b845e677532ef8a8805` (~5.624 GiB compressed). See [`config/universal-slim.json`](config/universal-slim.json) and [`docs/SLIM-UNIVERSAL.md`](docs/SLIM-UNIVERSAL.md). **No HF GPU end-to-end run has been tested or enabled**; missing local custom nodes are not publicly redistributed.

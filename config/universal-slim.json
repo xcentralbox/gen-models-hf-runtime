@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "profile": "universal-slim",
+  "source_base": "python:3.12-slim",
+  "source_commit": "97cac9e96a38b13759cb3b170829090b08012770",
+  "image": "ghcr.io/xcentralbox/comfyui-universal-slim@sha256:afca7f0ff17c32697d5959836bd0eb51915481a1e27b7b845e677532ef8a8805",
+  "build_run_id": 38723015759,
+  "cpu_smoke_run_id": 38723015759,
+  "cpu_test_status": "completed_success",
+  "cpu_mandatory_node_classes_verified": [
+    "ComfyUILTX25MSRICLoRALoader",
+    "ComfyUILTX25MSRMultiReferenceGuide",
+    "LTXVLatentUpsampler",
+    "MiniMaxH3EasyLoader",
+    "MiniMaxH3Easy",
+    "MiniMaxH3EasyOutput",
+    "VedaSparseAttention",
+    "SeedVR2LoadDiTModel",
+    "SeedVR2VideoUpscaler",
+    "H3FaceSelect",
+    "H3FaceStitch",
+    "TextEncodeQwenImage21"
+  ],
+  "github_cpu_test_artifact": "universal-slim-nodecheck-PASS",
+  "uncompressed_layers_size": "unverified",
+  "compressed_layers_gib_approx": 5.624,
+  "gpu_cuda_inference_verified": false,
+  "hf_model_mounts_verified": false,
+  "production_enabled": false,
+  "missing_custom_extensions": [
+    "ComfyUI-H3-PersonMask",
+    "ComfyUI-YuE2-Instrumental"
+  ],
+  "notes": "12 public workflow-family representative node classes verified on CPU-only ComfyUI server; does not mean all 87 saved workflows or GPU validated."
+}
