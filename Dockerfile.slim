@@ -1,0 +1,76 @@
+# syntax=docker/dockerfile:1.7
+# EXPERIMENTAL minimal Python-3.12-slim -> PyTorch CUDA12.8 -> ComfyUI nodes.
+# Full software is preinstalled on GitHub CPU BUILD, no package installation
+# during HF Jobs; no GPUs, checkpoints, HF tokens or private workflow JSON.
+# Historical ready fallback: ghcr.io/xcentralbox/comfyui-ltx@sha256:2fb33e...
+FROM python:3.12-slim AS core
+ARG COMFY_SHA=3c1b7a17fdf239d35ce98cc777756f572d089795
+ENV DEBIAN_FRONTEND=noninteractive PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1 \
+    COMFY_DIR=/comfyui HF_HUB_DISABLE_TELEMETRY=1
+# Build tools are necessary for native Python extensions (not for GPU inference).
+# Keep apt dependencies localized to CPU image build; remove the compiler after
+# python deps are installed in the final universal stage below.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl ffmpeg libgl1 libglib2.0-0 libsm6 libxext6 ca-certificates \
+    build-essential python3-dev pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+COPY config/constraints.txt /tmp/comfy-constraints.txt
+# Official CUDA wheels provide CUDA runtime Python dependencies; no large
+# pytorch/pytorch CUDA-devel base image. The HF host supplies NVIDIA drivers.
+# NOTE: python slim alone CANNOT run GPU workloads until these wheels installed.
+RUN python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu128 \
+    torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 \
+    && python -c "import torch; assert torch.version.cuda == '12.8', torch.version.cuda; print('Torch with CUDA',torch.__version__,torch.version.cuda)"
+RUN git clone https://github.com/comfyanonymous/ComfyUI.git /comfyui \
+    && git -C /comfyui checkout --detach ${COMFY_SHA} \
+    && python -m pip install --no-cache-dir -c /tmp/comfy-constraints.txt -r /comfyui/requirements.txt \
+    && python -m pip install --no-cache-dir -c /tmp/comfy-constraints.txt requests websocket-client==1.8.0 psutil
+WORKDIR /comfyui
+CMD ["python", "-c", "print('Prebuilt python-slim ComfyUI OCI: HF Jobs runner required')"]
+
+# LTX-2.5, MSR, DWPose reused from the already successful GHCR LTX image.
+FROM core AS ltx_slim
+RUN git clone https://github.com/Lightricks/ComfyUI-LTXVideo.git /comfyui/custom_nodes/ComfyUI-LTXVideo \
+    && git -C /comfyui/custom_nodes/ComfyUI-LTXVideo checkout --detach 3bf3ca62595f1764c47d01c35c8e5dfe47e1a88f \
+    && git clone https://github.com/liconstudio/ComfyUI-LTX2.5-MSR.git /comfyui/custom_nodes/ComfyUI-LTX2.5-MSR \
+    && git -C /comfyui/custom_nodes/ComfyUI-LTX2.5-MSR checkout --detach 03061c18f8a79d26f3c63931dd8e28f5e5d872a6 \
+    && git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git /comfyui/custom_nodes/comfyui_controlnet_aux \
+    && git -C /comfyui/custom_nodes/comfyui_controlnet_aux checkout --detach a587a4c1594524c1d2de5cd1a86cd868ff448e1c \
+    && python -m pip install -c /tmp/comfy-constraints.txt -r /comfyui/custom_nodes/ComfyUI-LTXVideo/requirements.txt \
+    && python -m pip install -c /tmp/comfy-constraints.txt \
+       onnxruntime==1.23.2 timm==1.0.20 scikit-image omegaconf==2.3.0 \
+       addict==2.4.0 yacs==0.1.8 trimesh rtree albumentationsx scikit-learn mediapipe \
+    && python -c "import torch, diffusers, transformers, kornia, colour, OpenImageIO, websocket; print('ltx packages', torch.__version__)"
+# Pose model files are HF repo mounts, not bundled. /models/pose_preprocessors is
+# not a valid default unless the bridge mounts the files there; keep ckpts fallback.
+ENV AUX_ORT_PROVIDERS=CPUExecutionProvider
+
+
+# Add all compatible public H3/Qwen/SeedVR2/Veda nodes to the same software
+# environment. Private locally-authored H3-PersonMask and YuE2-Instrumental
+# nodes are NOT distributed until ownership / licensing review.
+FROM ltx_slim AS universal_slim
+RUN git clone https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3.git /comfyui/custom_nodes/ComfyUI-Spectrum-MiniMax-H3 \
+    && git -C /comfyui/custom_nodes/ComfyUI-Spectrum-MiniMax-H3 checkout --detach 806fe498d574a726fecb8818917f00a4b993fd77 \
+    && git clone https://github.com/nkxx188/ComfyUI-MiniMaxH3-Easy.git /comfyui/custom_nodes/ComfyUI-MiniMaxH3-Easy \
+    && git -C /comfyui/custom_nodes/ComfyUI-MiniMaxH3-Easy checkout --detach 23ba347cc9208641e2b5ad2cd1ed11a6363c5740 \
+    && git clone https://github.com/Carasibana/ComfyUI-H3-FaceRefine.git /comfyui/custom_nodes/ComfyUI-H3-FaceRefine \
+    && git -C /comfyui/custom_nodes/ComfyUI-H3-FaceRefine checkout --detach d8521d14fe0d721d80cd9417fff5a559cbc21aba \
+    && git clone https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git /comfyui/custom_nodes/seedvr2_videoupscaler \
+    && git -C /comfyui/custom_nodes/seedvr2_videoupscaler checkout --detach 4490bd1f482e026674543386bb2a4d176da245b9 \
+    && git clone https://github.com/veda-sparse/Veda-on-ComfyUI.git /comfyui/custom_nodes/Veda-on-ComfyUI \
+    && git -C /comfyui/custom_nodes/Veda-on-ComfyUI checkout --detach 8d7ac153ac215d636eaf1b5910b0536c3de9e6ed \
+    && git clone https://github.com/LAOGOU-666/Comfyui-Memory_Cleanup.git /comfyui/custom_nodes/Comfyui-Memory_Cleanup \
+    && git -C /comfyui/custom_nodes/Comfyui-Memory_Cleanup checkout --detach 58de13a6090e04408e343501ff8902c034d9f518 \
+    && python -m pip install -c /tmp/comfy-constraints.txt \
+       triton 'omegaconf>=2.3.0' 'diffusers>=0.33.1' 'peft>=0.17.0' \
+       'rotary-embedding-torch>=0.5.3' opencv-python-headless gguf ultralytics matplotlib scipy \
+    && python -m pip install -c /tmp/comfy-constraints.txt -r /comfyui/custom_nodes/ComfyUI-H3-FaceRefine/requirements.txt \
+    && python -m pip install -c /tmp/comfy-constraints.txt -r /comfyui/custom_nodes/seedvr2_videoupscaler/requirements.txt \
+    && python -m pip install -c /tmp/comfy-constraints.txt -r /comfyui/custom_nodes/Veda-on-ComfyUI/requirements.txt \
+    && python -c "import torch, triton, diffusers, peft, cv2, gguf, ultralytics; print('h3 packages', torch.__version__)"
+
+# Native wheels are installed; remove build compiler headers where possible.
+# Important: apt autoremove can remove system libs; do not auto-purge until
+# actual CPU imports and /object_info registration have been validated.
+RUN python -c "import torch, diffusers, transformers, kornia, OpenImageIO, websocket; assert torch.version.cuda == '12.8'; print('universal CUDA wheel runtime',torch.__version__)"

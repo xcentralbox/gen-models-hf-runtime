@@ -1,0 +1,11 @@
+# Experimental universal image on `python:3.12-slim`
+
+**Not production, not GPU verified, not yet built.** This is a *new* OCI image candidate, not a change to the already built and CPU-verified `comfyui-ltx` image. Code paths and Dockerfile are intentionally separate, so rollback requires no HF or Modal runtime change.
+
+- Dockerfile: `Dockerfile.slim` → `universal_slim` single-stage output. Base `python:3.12-slim` (~40 MiB from Docker Hub tag metadata). Uses official PyTorch 2.9.1 CUDA 12.8 binary Python wheels; actual final OCI image will be **much larger** than 40 MiB because `torch`, NVIDIA runtime libraries, ComfyUI and nodes are preinstalled at build time.
+- Includes LTXVideo/MSR/ControlNetAux and H3/FaceRefine/SeedVR2/Veda/Qwen common node code pinned to versions already staged from separate Modal workers. No model checkpoints or actual workflows in OCI layers. HF Jobs must not run pip/git commands for each Generate.
+- **NOT a complete replica of locally authored workflows**: custom in-house `ComfyUI-H3-PersonMask` and `ComfyUI-YuE2-Instrumental` remain excluded from this *public* Git repository and OCI output until licensing/distribution is approved. Their workflows are not GPU-ready. Same applies to yet-unverified workflow-specific custom node class and model paths.
+- GitHub CPU image build workflow: `.github/workflows/build-universal-slim.yml`, manual dispatch and one narrowly guarded, one-time source-push trigger. No paid HF GPU test, no Modal deploy, no provider setting changes.
+- **After build:** obtain OCI index and amd64 layer sizes, anonymous GHCR pull, compare to previous LTX-only compressed image 10.22 GiB (not a like-for-like comparison since universal contains more nodes). Run CPU-only import and ComfyUI `/object_info` smoke for both families. Only then consider whether PyTorch/Triton/Diffusers conflicts can be unified on real GPU. A successful Docker build does not prove full workflow coverage or GPU compatibility.
+- Do not include Python packages with incompatible GPUs if a node requires separate torch build; if CPU/GPU conflicts emerge, document rather than forcing universal production.
+- Target package is `ghcr.io/xcentralbox/comfyui-universal-slim`, not the older `ghcr.io/xcentralbox/comfyui-ltx`.

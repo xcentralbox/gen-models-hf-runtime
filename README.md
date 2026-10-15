@@ -32,3 +32,9 @@ Validated against live Empower worker sources on 2026-10-15. The previous Lover 
 - PyTorch/LTX Python imports succeeded with CUDA unavailable. Actual ComfyUI `--cpu` server passed `/system_stats`, and `/object_info` contained mandatory MSR/LTX classes (`ComfyUILTX25MSRICLoRALoader`, `ComfyUILTX25MSRMultiReferenceGuide`, `LTXVLatentUpsampler`, audio VAE, etc.). Container cleaned up.
 - The image is **~10.22 GiB compressed**. The GitHub CPU test took **4m24s just to pull** it; do not assume identical startup timing/billing on HF hardware. Future optimization candidate: `pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime` (~4.14 GiB base versus ~8.90 GiB `-devel`), but build compatibility has not been demonstrated.
 - **Not tested:** CUDA inference, full 04D/04E generation, GPU VRAM, read-only HF mounts, private bucket media, HF Job cancellation, actual HF cold-start time. Production remains disabled on Empower.
+
+## Experimental one-image slim universal build — 2026-10-15
+
+As requested, a new **single combined** ComfyUI image based on `python:3.12-slim` is prepared in [`Dockerfile.slim`](Dockerfile.slim), with CPU-only GitHub build in [`.github/workflows/build-universal-slim.yml`](.github/workflows/build-universal-slim.yml). It installs official **PyTorch 2.9.1 + CUDA 12.8** Linux wheels, ComfyUI and the *public* LTX/H3 custom nodes before any GPU Job. This does **not** mean the final image is 40 MiB, and is distinct from the already CPU-verified LTX image.
+
+See [`docs/SLIM-UNIVERSAL.md`](docs/SLIM-UNIVERSAL.md) for scope, known missing private-node overlays and verification requirements. **Until OCI digest is independently verified and CUDA/model tests are approved, do not enable HF production.**
