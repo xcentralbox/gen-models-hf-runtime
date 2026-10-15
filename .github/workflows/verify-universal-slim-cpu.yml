@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   cpu:
-    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == '[SLIM-CPU-VERIFY]'
+    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == '[SLIM-CPU-DIAG]'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
@@ -62,6 +62,7 @@ jobs:
             -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
             "$OCI_IMAGE" python -c "import pathlib,torch,torchvision,torchaudio,triton,transformers,diffusers,kornia,colour,OpenImageIO,websocket,peft,cv2,gguf; assert torch.version.cuda == '12.8',torch.version.cuda; assert not torch.cuda.is_available(); assert pathlib.Path('/comfyui/custom_nodes/ComfyUI-LTX2.5-MSR').is_dir(); assert pathlib.Path('/comfyui/custom_nodes/ComfyUI-H3-FaceRefine').is_dir(); print('CPU imports PASS; Torch',torch.__version__,'built-for CUDA',torch.version.cuda)"
       - name: Actual ComfyUI --cpu startup and LTX/H3/SeedVR2/Veda node registry
+        id: nodecheck
         timeout-minutes: 10
         shell: bash
         run: |
@@ -78,7 +79,26 @@ jobs:
             sleep 4
           done
           if (( ready != 1 )); then echo 'CPU startup timeout' >&2; exit 1; fi
-          docker exec universal-slim-cpu python -c "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8188/object_info',timeout=100)); must=('ComfyUILTX25MSRICLoRALoader','ComfyUILTX25MSRMultiReferenceGuide','LTXVLatentUpsampler','MiniMaxH3EasyLoader','MiniMaxH3Easy','MiniMaxH3EasyOutput','VedaSparseAttention','SeedVR2LoadDiTModel','SeedVR2VideoUpscaler','H3FaceSelect','H3FaceStitch','TextEncodeQwenImage21'); missing=[x for x in must if x not in d]; print('REGISTERED_NODES',len(d),'REQUIRED_MISSING',missing,'PRIVATE_H3_PERSONMASK_PRESENT','H3PersonSegMask' in d); assert not missing,missing; print('PASS universal public LTX/H3/Qwen-related/SeedVR2/Veda nodes')"
+          # Capture only public node identifiers, never secrets/weights. A GitHub
+          # Actions artifact NAME exposes missing node IDs via anonymous API,
+          # since raw job logs require logged-in GitHub permissions.
+          set +e
+          node_output=$(docker exec universal-slim-cpu python -c "import json,urllib.request,sys; d=json.load(urllib.request.urlopen('http://127.0.0.1:8188/object_info',timeout=100)); must=('ComfyUILTX25MSRICLoRALoader','ComfyUILTX25MSRMultiReferenceGuide','LTXVLatentUpsampler','MiniMaxH3EasyLoader','MiniMaxH3Easy','MiniMaxH3EasyOutput','VedaSparseAttention','SeedVR2LoadDiTModel','SeedVR2VideoUpscaler','H3FaceSelect','H3FaceStitch','TextEncodeQwenImage21'); missing=[x for x in must if x not in d]; print('NODE_RESULT='+('PASS' if not missing else 'MISSING_'+','.join(missing)),flush=True); print('REGISTERED_COUNT='+str(len(d)),flush=True); sys.exit(0 if not missing else 7)" 2>&1)
+          node_status=$?
+          set -e
+          printf '%s\n' "$node_output" | tee "$RUNNER_TEMP/universal-slim-cpu-diagnosis.txt"
+          result=$(printf '%s\n' "$node_output" | sed -n 's/^NODE_RESULT=//p' | head -n 1 | tr -cd 'A-Za-z0-9_,.-' | cut -c 1-176)
+          echo "fingerprint=${result:-NODE_PROBE_FAILED}" >> "$GITHUB_OUTPUT"
+          if (( node_status != 0 )); then echo 'Node list check did not pass; see artifact NAME / diagnostic text.' >&2; exit "$node_status"; fi
+          echo 'PASS universal public node registration.'
+      - name: Publish public-safe node diagnostic artifact name
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slim-node-diagnostic-${{ steps.nodecheck.outputs.fingerprint || 'UNKNOWN' }}
+          path: ${{ runner.temp }}/universal-slim-cpu-diagnosis.txt
+          if-no-files-found: ignore
+          retention-days: 3
       - name: Always cleanup test container
         if: always()
         shell: bash
