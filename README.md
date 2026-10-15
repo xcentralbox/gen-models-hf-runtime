@@ -1,6 +1,6 @@
 # ComfyUI → Hugging Face Jobs: extensible runtime images
 
-**Status: PREPARED, NOT BUILT/PUBLISHED, NOT ENABLED.** This is the proposed public source repo for `xcentralbox/comfyui-hf-runtime`. It does **not** include any paid HF GPU launches or model weights. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+**Status: PREPARED, NOT BUILT/PUBLISHED, NOT ENABLED.** This is the proposed public source repo for `xcentralbox/gen-models-hf-runtime`. It does **not** include any paid HF GPU launches or model weights. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Profiles
 
@@ -16,7 +16,7 @@
 
 ## GitHub publication (not yet performed)
 
-1. Create a **public** empty `xcentralbox/comfyui-hf-runtime` GitHub repository or authorize Empower's GitHub access. Never upload the user's complete private ComfyUI worktree to this public repository.
+1. Create a **public** empty `xcentralbox/gen-models-hf-runtime` GitHub repository or authorize Empower's GitHub access. Never upload the user's complete private ComfyUI worktree to this public repository.
 2. Push this sanitized project from Empower, then run **Actions → Build preinstalled ComfyUI GPU images → Run workflow** with `profile=ltx` manually. No automatic GPU build/test is configured. The standard hosted runner may be too small for a CUDA/PyTorch image; do not assume it will work until proven.
 3. GHCR image package is often initially private: make `comfyui-ltx` package public in GitHub settings, then confirm public unauthenticated image pull. Record the **immutable digest**, not only a tag.
 4. Repeat for `h3`, `qwen`, `audio` after validating custom node dependencies and public code license. **Do not enable HF GPU production** until per-profile CUDA/ComfyUI smoke passes with explicit budget permission.
