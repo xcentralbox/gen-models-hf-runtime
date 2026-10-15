@@ -38,3 +38,7 @@ The canonical ComfyUI editor and its CPU-only orchestration live on Empower. Mod
 - No checkpoint files, input/output files, account IDs, SSH keys or API secrets in public Git. No secrets baked as Docker `ARG` / `ENV`. The only registry authentication is ephemeral `GITHUB_TOKEN` used inside the GitHub Actions workflow.
 - No scheduled builds or auto-push triggers. `workflow_dispatch` only. No integration tests involving actual GPU without explicit operator-approved cost cap.
 - Promote only `ghcr.io/xcentralbox/comfyui-<profile>@sha256:<digest>` after verifying an **anonymous image pull**, image entrypoint dependencies, model mount targets, exact node registration, budget and cancellation. Never use mutable `latest` for production.
+
+## Verification state as of 2026-10-15
+
+LTX `ghcr.io/xcentralbox/comfyui-ltx@sha256:2fb33e0935d5162f4bae8649e18207b4c68df3391284771671c21eef4c917a73` was published and CPU-validated in GitHub Actions run `38709334990`: actual ComfyUI start, package imports, mandatory MSR/LTX node registration and stop all passed, entirely without GPU. **This is not HF CUDA validation** and does not enable production. Other profiles remain unbuilt.

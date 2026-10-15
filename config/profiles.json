@@ -9,30 +9,52 @@
   "images": {
     "core": {
       "docker_target": "core",
-      "workflow_family": ["Vectors (CPU-only; HF GPU not needed)"],
+      "workflow_family": [
+        "Vectors (CPU-only; HF GPU not needed)"
+      ],
       "role": "shared ComfyUI/PyTorch/CUDA base; not a paid runtime default",
       "deploy_status": "source_prepared_unbuilt"
     },
     "ltx": {
       "docker_target": "ltx",
-      "workflow_family": ["LTX-2.5"],
+      "workflow_family": [
+        "LTX-2.5"
+      ],
       "role": "LTX-2.5, MSR V2, ControlNet Aux",
-      "deploy_status": "source_prepared_unbuilt",
-      "mandatory_nodes": ["ComfyUILTX25MSRICLoRA"],
+      "deploy_status": "oci_cpu_verified",
+      "mandatory_nodes": [
+        "ComfyUILTX25MSRICLoRALoader",
+        "ComfyUILTX25MSRMultiReferenceGuide",
+        "LTXVLatentUpsampler",
+        "LTXVConditioning",
+        "LTXVAudioVAEEncode",
+        "LTXICLoRALoaderModelOnly",
+        "KSamplerSelect",
+        "GemmaAPITextEncode"
+      ],
       "missing_overlays": [],
-      "min_gpu_vram_validation": "unverified"
+      "min_gpu_vram_validation": "unverified",
+      "immutable_image": "ghcr.io/xcentralbox/comfyui-ltx@sha256:2fb33e0935d5162f4bae8649e18207b4c68df3391284771671c21eef4c917a73",
+      "oci_cpu_verify_run": 38709334990,
+      "gpu_runtime_verified": false
     },
     "h3": {
       "docker_target": "h3",
-      "workflow_family": ["MiniMaxH3-Production"],
+      "workflow_family": [
+        "MiniMaxH3-Production"
+      ],
       "role": "MiniMax H3, Veda, SeedVR2, FaceRefine",
       "deploy_status": "source_prepared_unbuilt",
-      "missing_overlays": ["ComfyUI-H3-PersonMask"],
+      "missing_overlays": [
+        "ComfyUI-H3-PersonMask"
+      ],
       "min_gpu_vram_validation": "unverified"
     },
     "qwen": {
       "docker_target": "qwen",
-      "workflow_family": ["QWEN21"],
+      "workflow_family": [
+        "QWEN21"
+      ],
       "role": "Qwen Image 2.1 standard ComfyUI with existing H3 dependencies, independently extensible",
       "deploy_status": "source_prepared_unbuilt",
       "missing_overlays": [],
@@ -40,10 +62,14 @@
     },
     "audio": {
       "docker_target": "audio",
-      "workflow_family": ["Audio"],
+      "workflow_family": [
+        "Audio"
+      ],
       "role": "Audio workloads; extends H3 profile initially",
       "deploy_status": "source_prepared_unbuilt",
-      "missing_overlays": ["ComfyUI-YuE2-Instrumental"],
+      "missing_overlays": [
+        "ComfyUI-YuE2-Instrumental"
+      ],
       "min_gpu_vram_validation": "unverified"
     }
   },

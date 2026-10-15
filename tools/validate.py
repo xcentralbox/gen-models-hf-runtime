@@ -15,7 +15,11 @@ for tag,meta in config['images'].items():
  assert re.fullmatch('[a-z][a-z0-9-]+',tag)
  assert docker.count(' AS '+tag+'\n')==1,tag
  assert meta['docker_target']==tag
- assert meta['deploy_status']=='source_prepared_unbuilt'
+ assert meta['deploy_status'] in ('source_prepared_unbuilt','oci_cpu_verified')
+ if meta['deploy_status']=='oci_cpu_verified':
+  assert tag=='ltx' and meta.get('immutable_image','').startswith('ghcr.io/xcentralbox/comfyui-ltx@sha256:')
+  assert meta.get('oci_cpu_verify_run') == 38709334990
+  assert meta.get('gpu_runtime_verified') is False
  assert len(meta['workflow_family'])
 assert 'git clone https://github.com/comfyanonymous/ComfyUI.git /comfyui' in docker
 assert config['core_version'] in docker or ('COMFY_SHA='+config['core_version']) in docker
